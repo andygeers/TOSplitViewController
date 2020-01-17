@@ -156,44 +156,50 @@ NSString * const TOSplitViewControllerNotificationSplitViewControllerKey =
     [self layoutSplitViewControllerContentForSize:self.view.bounds.size];
 }
 
-- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
+- (void)viewWillTransitionToSize:(CGSize)wrongSize withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
 {
-    // When the view isn't animated (eg, split screen resizes), just force a complete manual layout
-    if (coordinator.isAnimated == NO) {
-        [self layoutSplitViewControllerContentForSize:size];
-        return;
-    }
-
-    // Get the number of columns this new size can theoretically fit
-    NSInteger newNumberOfColumns = [self possibleNumberOfColumnsForWidth:size.width];
-
-    // If the column numbers don't match, do an expand/collapse animation.
-    // But since there's a possibility the delegate indicates there aren't enough view controllers
-    // to do this, account for the fact these operations 'may' fail, and default to the screen resize in that case
-    if (newNumberOfColumns != self.visibleViewControllers.count) {
-        BOOL success = NO;
-        @autoreleasepool {
-            if (newNumberOfColumns < self.visibleViewControllers.count) {
-                success = [self transitionToCollapsedViewControllerCount:newNumberOfColumns withSize:size withTransitionCoordinator:coordinator];
-            }
-            else {
-                success = [self transitionToExpandedViewControllerCount:newNumberOfColumns withSize:size withTransitionCoordinator:coordinator];
-            }
+    // There is a bug in viewWillTransitionToSize where it always returns the same size... so do a fudge where we wait until we can actually just use the view size
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.01f * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            
+        CGSize size = self.view.frame.size;
+    
+        // When the view isn't animated (eg, split screen resizes), just force a complete manual layout
+        if (coordinator.isAnimated == NO) {
+            [self layoutSplitViewControllerContentForSize:size];
+            return;
         }
 
-        if (success) { return; }
-    }
+        // Get the number of columns this new size can theoretically fit
+        NSInteger newNumberOfColumns = [self possibleNumberOfColumnsForWidth:size.width];
 
-    // If it's not possible to do an expand/collapse animation, just animate the current controllers resizing
-    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
-        [self layoutViewControllersForBoundsSize:size];
-        
-        [self.primaryViewController viewWillTransitionToSize:self.primaryViewController.view.frame.size withTransitionCoordinator:coordinator];
-        [self.secondaryViewController viewWillTransitionToSize:self.secondaryViewController.view.frame.size withTransitionCoordinator:coordinator];
-        [self.detailViewController viewWillTransitionToSize:self.detailViewController.view.frame.size withTransitionCoordinator:coordinator];
+        // If the column numbers don't match, do an expand/collapse animation.
+        // But since there's a possibility the delegate indicates there aren't enough view controllers
+        // to do this, account for the fact these operations 'may' fail, and default to the screen resize in that case
+        if (newNumberOfColumns != self.visibleViewControllers.count) {
+            BOOL success = NO;
+            @autoreleasepool {
+                if (newNumberOfColumns < self.visibleViewControllers.count) {
+                    success = [self transitionToCollapsedViewControllerCount:newNumberOfColumns withSize:size withTransitionCoordinator:coordinator];
+                }
+                else {
+                    success = [self transitionToExpandedViewControllerCount:newNumberOfColumns withSize:size withTransitionCoordinator:coordinator];
+                }
+            }
 
-        [self layoutSeparatorViewsForViewControllersWithHeight:size.height];
-    } completion:nil];
+            if (success) { return; }
+        }
+
+        // If it's not possible to do an expand/collapse animation, just animate the current controllers resizing
+        [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
+            [self layoutViewControllersForBoundsSize:size];
+            
+            [self.primaryViewController viewWillTransitionToSize:self.primaryViewController.view.frame.size withTransitionCoordinator:coordinator];
+            [self.secondaryViewController viewWillTransitionToSize:self.secondaryViewController.view.frame.size withTransitionCoordinator:coordinator];
+            [self.detailViewController viewWillTransitionToSize:self.detailViewController.view.frame.size withTransitionCoordinator:coordinator];
+
+            [self layoutSeparatorViewsForViewControllersWithHeight:size.height];
+        } completion:nil];
+    });
 }
 
 - (BOOL)transitionToCollapsedViewControllerCount:(NSInteger)newCount withSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
